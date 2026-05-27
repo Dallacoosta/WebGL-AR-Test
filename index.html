@@ -4,57 +4,69 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AR Test</title>
-  <!-- Pinned to specific commit — never changes, never gets stale cache -->
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.3.3/aframe/build/aframe-ar.js"></script>
   <style>
-    body { margin:0; overflow:hidden; }
+    body { margin:0; overflow:hidden; background:#000; }
     #log {
       position:fixed; top:0; left:0; right:0; z-index:9999;
-      background:rgba(0,0,0,0.75); color:#ffcc00;
-      font:11px monospace; padding:6px 10px; line-height:1.8;
+      background:rgba(0,0,0,0.85); color:#ffcc00;
+      font:12px monospace; padding:8px 10px; line-height:2;
       pointer-events:none;
     }
   </style>
 </head>
 <body>
-
-<div id="log">starting...</div>
-
-<a-scene
-  id="scene"
-  embedded
-  arjs="sourceType: webcam; debugUIEnabled: false;"
-  vr-mode-ui="enabled: false">
-
-  <a-marker preset="hiro" id="marker">
-    <a-box position="0 0.5 0" color="red" scale="1 1 1"></a-box>
-  </a-marker>
-
-  <a-entity camera></a-entity>
-</a-scene>
-
+<div id="log">step 1: page loaded</div>
 <script>
 const log = document.getElementById('log');
 function msg(t) { log.innerHTML += '<br>' + t; console.log(t); }
 
-document.getElementById('scene').addEventListener('loaded', () => {
-  msg('scene loaded ✓');
+// Step 1: load A-Frame
+msg('step 2: loading aframe...');
+const s1 = document.createElement('script');
+s1.src = 'https://aframe.io/releases/1.3.0/aframe.min.js';
+s1.onload  = () => { msg('step 3: aframe OK ✓ — loading ar.js...'); loadARJS(); };
+s1.onerror = () => { msg('step 3: aframe FAILED ✗ — try different URL'); };
+document.head.appendChild(s1);
 
-  const canvas = document.querySelector('canvas');
-  const video  = document.querySelector('video');
-  msg('canvas z: ' + (canvas ? getComputedStyle(canvas).zIndex : 'none'));
-  msg('video  z: ' + (video  ? getComputedStyle(video).zIndex  : 'none'));
+function loadARJS() {
+  const s2 = document.createElement('script');
+  s2.src = 'https://raw.githack.com/AR-js-org/AR.js/3.3.3/aframe/build/aframe-ar.js';
+  s2.onload  = () => { msg('step 4: ar.js OK ✓ — building scene...'); buildScene(); };
+  s2.onerror = () => { msg('step 4: ar.js FAILED ✗ — CDN issue'); };
+  document.head.appendChild(s2);
+}
+
+function buildScene() {
+  msg('step 5: inserting a-scene...');
+  document.body.insertAdjacentHTML('beforeend', `
+    <a-scene id="scene" embedded
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+      vr-mode-ui="enabled: false">
+      <a-marker preset="hiro" id="marker">
+        <a-box position="0 0.5 0" color="red"></a-box>
+      </a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>
+  `);
 
   const scene = document.getElementById('scene');
-  if (scene.renderer) {
-    scene.renderer.setClearColor(0x000000, 0);
-    msg('alpha forced ✓');
-  }
+  scene.addEventListener('loaded', () => {
+    msg('step 6: scene loaded ✓ — POINT AT HIRO MARKER');
+    if (scene.renderer) {
+      scene.renderer.setClearColor(0x000000, 0);
+      msg('alpha transparent ✓');
+    }
+    document.getElementById('marker').addEventListener('markerFound', () => msg('🟢 MARKER FOUND — cube should show!'));
+    document.getElementById('marker').addEventListener('markerLost',  () => msg('marker lost'));
+  });
 
-  document.getElementById('marker').addEventListener('markerFound', () => msg('✓ MARKER FOUND — cube should show'));
-  document.getElementById('marker').addEventListener('markerLost',  () => msg('marker lost'));
-});
+  // Timeout fallback
+  setTimeout(() => {
+    if (!document.querySelector('canvas')) {
+      msg('step 6: TIMEOUT — scene never loaded, no canvas created');
+    }
+  }, 8000);
+}
 </script>
 </body>
 </html>
