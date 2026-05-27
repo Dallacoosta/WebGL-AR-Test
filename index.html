@@ -1,25 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+
+<title>AR Hiro Cube Test</title>
+
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.4.2/dist/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ar.js@3.4.5/aframe/build/aframe-ar.js"></script>
+
+<style>
+  *{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+  }
+
+  html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+    font-family:Arial, sans-serif;
+  }
+
+  a-scene{
+    position:fixed !important;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+  }
+
+  #ui{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    z-index:10;
+    pointer-events:none;
+  }
+
+  #status{
+    position:absolute;
+    top:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,0.7);
+    color:#00ffff;
+    padding:10px 16px;
+    border:1px solid #00ffff;
+    font-size:14px;
+    letter-spacing:2px;
+    white-space:nowrap;
+  }
+
+  #controls{
+    position:absolute;
+    bottom:30px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:10px;
+    pointer-events:auto;
+  }
+
+  button{
+    background:rgba(0,0,0,0.75);
+    color:white;
+    border:1px solid #00ffff;
+    padding:12px 18px;
+    font-size:14px;
+    cursor:pointer;
+    min-width:140px;
+  }
+
+  button:active{
+    transform:scale(0.97);
+  }
+
+  #info{
+    position:absolute;
+    bottom:90px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,0.7);
+    color:white;
+    padding:8px 12px;
+    font-size:12px;
+    text-align:center;
+    line-height:1.5;
+    max-width:320px;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+
+  <div id="status">
+    SEARCHING FOR HIRO MARKER
+  </div>
+
+  <div id="info">
+    Open the official Hiro marker on another screen or print it.
+  </div>
+
+  <div id="controls">
+    <button id="switch-camera">
+      SWITCH CAMERA
+    </button>
+  </div>
+
+</div>
+
+<a-scene
+  embedded
+  vr-mode-ui="enabled: false"
+  renderer="logarithmicDepthBuffer: true; antialias: true;"
+  arjs="sourceType: webcam; debugUIEnabled: false;">
+
+  <a-marker
+    id="marker"
+    preset="hiro">
+
+    <a-box
+      id="cube"
+      position="0 0.5 0"
+      rotation="0 0 0"
+      width="1"
+      height="1"
+      depth="1"
+      color="#ff0000">
+    </a-box>
+
+  </a-marker>
+
+  <a-entity camera></a-entity>
+
+</a-scene>
+
 <script>
-const marker = document.getElementById('marker');
-const cube = document.getElementById('cube');
 
-const statusEl = document.getElementById('status');
+const statusEl = document.getElementById("status");
+const cube = document.getElementById("cube");
+const marker = document.getElementById("marker");
+const switchBtn = document.getElementById("switch-camera");
 
-let devices = [];
-let currentCamera = 0;
-let stream = null;
+let rotation = 0;
 
-// --------------------------------------------------
-// ROTATING CUBE
-// --------------------------------------------------
+function animateCube(){
 
-let rot = 0;
-
-function animateCube() {
-  rot += 1;
+  rotation += 1;
 
   cube.setAttribute(
-    'rotation',
-    `${rot * 0.7} ${rot} ${rot * 0.3}`
+    "rotation",
+    `${rotation * 0.5} ${rotation} ${rotation * 0.25}`
   );
 
   requestAnimationFrame(animateCube);
@@ -27,143 +164,136 @@ function animateCube() {
 
 animateCube();
 
-// --------------------------------------------------
-// MARKER EVENTS
-// --------------------------------------------------
+marker.addEventListener("markerFound", () => {
 
-marker.addEventListener('markerFound', () => {
-  console.log('marker found');
+  console.log("MARKER FOUND");
 
-  statusEl.textContent = 'MARKER FOUND ✓';
-  statusEl.classList.add('found');
+  statusEl.innerHTML = "MARKER FOUND ✓";
+  statusEl.style.color = "#00ff88";
+  statusEl.style.borderColor = "#00ff88";
+
 });
 
-marker.addEventListener('markerLost', () => {
-  console.log('marker lost');
+marker.addEventListener("markerLost", () => {
 
-  statusEl.textContent = 'SEARCHING FOR MARKER';
-  statusEl.classList.remove('found');
+  console.log("MARKER LOST");
+
+  statusEl.innerHTML = "SEARCHING FOR HIRO MARKER";
+  statusEl.style.color = "#00ffff";
+  statusEl.style.borderColor = "#00ffff";
+
 });
 
-// --------------------------------------------------
-// CAMERA ENUMERATION
-// --------------------------------------------------
+let videoDevices = [];
+let currentCameraIndex = 0;
 
-async function getCameras() {
+async function setupCameraList(){
 
-  try {
+  try{
 
-    // request permission first
     await navigator.mediaDevices.getUserMedia({
-      video: true
+      video:true,
+      audio:false
     });
 
-    const allDevices =
-      await navigator.mediaDevices.enumerateDevices();
+    const devices = await navigator.mediaDevices.enumerateDevices();
 
-    devices = allDevices.filter(
-      d => d.kind === 'videoinput'
+    videoDevices = devices.filter(
+      device => device.kind === "videoinput"
     );
 
-    console.log('cameras:', devices);
+    console.log("VIDEO DEVICES:", videoDevices);
 
-  } catch (e) {
+  }catch(err){
 
-    console.error(e);
+    console.error(err);
 
   }
 }
 
-// --------------------------------------------------
-// SWITCH CAMERA
-// --------------------------------------------------
+async function switchCamera(){
 
-async function switchCamera() {
+  if(videoDevices.length <= 1){
 
-  if (devices.length === 0) return;
-
-  currentCamera =
-    (currentCamera + 1) % devices.length;
-
-  const deviceId =
-    devices[currentCamera].deviceId;
-
-  console.log(
-    'switching to:',
-    devices[currentCamera].label
-  );
-
-  // stop old stream
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
+    alert("Only one camera found.");
+    return;
   }
 
-  try {
+  currentCameraIndex++;
 
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        deviceId: {
-          exact: deviceId
-        },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    });
+  if(currentCameraIndex >= videoDevices.length){
+    currentCameraIndex = 0;
+  }
 
-    // replace video stream manually
-    const video = document.querySelector('video');
+  const selectedDevice = videoDevices[currentCameraIndex];
 
-    if (video) {
-      video.srcObject = stream;
-      video.play();
+  console.log("SWITCHING TO:", selectedDevice.label);
+
+  const scene = document.querySelector("a-scene");
+
+  if(scene && scene.systems["arjs"]){
+
+    const arSystem = scene.systems["arjs"];
+
+    if(arSystem.arToolkitSource){
+
+      arSystem.arToolkitSource.stop();
+
+    }
+  }
+
+  setTimeout(() => {
+
+    const currentVideo = document.querySelector("video");
+
+    if(currentVideo && currentVideo.srcObject){
+
+      currentVideo.srcObject.getTracks().forEach(track => {
+        track.stop();
+      });
+
     }
 
-  } catch (e) {
+    navigator.mediaDevices.getUserMedia({
 
-    console.error(e);
+      video:{
+        deviceId:{
+          exact:selectedDevice.deviceId
+        },
+        width:{ ideal:1280 },
+        height:{ ideal:720 }
+      },
+      audio:false
 
-  }
+    })
+    .then(stream => {
+
+      const video = document.querySelector("video");
+
+      if(video){
+
+        video.srcObject = stream;
+
+        video.play();
+
+      }
+
+    })
+    .catch(err => {
+
+      console.error(err);
+
+    });
+
+  },500);
+
 }
 
-// --------------------------------------------------
-// INIT
-// --------------------------------------------------
+switchBtn.addEventListener("click", switchCamera);
 
-document
-  .getElementById('btn-launch')
-  .addEventListener('click', async () => {
-
-    document
-      .getElementById('landing')
-      .classList.add('hidden');
-
-    document
-      .getElementById('hud')
-      .classList.add('visible');
-
-    await getCameras();
-
-  });
-
-// --------------------------------------------------
-// CAMERA SWITCH BUTTON
-// --------------------------------------------------
-
-const switchBtn = document.createElement('button');
-
-switchBtn.innerText = 'SWITCH CAMERA';
-
-switchBtn.style.position = 'fixed';
-switchBtn.style.top = '20px';
-switchBtn.style.right = '20px';
-switchBtn.style.zIndex = '1000';
-switchBtn.style.padding = '10px';
-switchBtn.style.background = 'black';
-switchBtn.style.color = 'white';
-switchBtn.style.border = '1px solid cyan';
-
-switchBtn.addEventListener('click', switchCamera);
-
-document.body.appendChild(switchBtn);
+setupCameraList();
 
 </script>
+
+</body>
+</html>
