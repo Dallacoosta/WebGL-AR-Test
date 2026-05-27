@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>CFD AR – Cube Test</title>
+<title>CFD AR Viewer</title>
 
-<!-- Exact URLs from official AR.js documentation -->
-<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.4.2/dist/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js"></script>
 
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -25,16 +24,14 @@
     position:fixed !important;
     top:0 !important; left:0 !important;
     width:100vw !important; height:100vh !important;
-    z-index:2 !important;  /* above video which is z-index:0 */
+    z-index:2 !important;
+    background:transparent !important;
   }
   a-scene {
     position:fixed !important;
     top:0 !important; left:0 !important;
     width:100vw !important; height:100vh !important;
-    background: transparent !important;
   }
-  /* AR.js internal canvas must be transparent */
-  canvas { background: transparent !important; }
 
   #landing {
     position:fixed; inset:0; z-index:999;
@@ -107,52 +104,31 @@
   embedded
   arjs="sourceType: webcam; debugUIEnabled: false;"
   renderer="antialias: true; logarithmicDepthBuffer: true; alpha: true;"
-  webxr="optionalFeatures: hit-test,local-floor"
   vr-mode-ui="enabled: false"
   loading-screen="enabled: false">
 
+  <a-assets>
+    <a-asset-item id="cfd-model" src="model.gltf"></a-asset-item>
+  </a-assets>
+
   <a-marker preset="hiro" id="marker"
     smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
-
-    <!-- Flat plane ON the marker surface — visible from any angle -->
-    <a-plane
+    <a-entity
+      id="model"
+      gltf-model="#cfd-model"
       position="0 0 0"
-      rotation="-90 0 0"
-      width="2" height="2"
-      color="#FF0000"
-      opacity="1"
-      side="double">
-    </a-plane>
-
-    <!-- Tall box above the marker — hard to miss -->
-    <a-box id="cube"
-      position="0 1 0"
-      width="1" height="2" depth="1"
-      color="#FF0000"
-      opacity="1"
-      side="double">
-    </a-box>
-
-    <!-- Text label floating above -->
-    <a-text
-      value="AR WORKS"
-      position="0 2.5 0"
-      align="center"
-      color="#ffffff"
-      scale="2 2 2">
-    </a-text>
-
+      scale="0.1 0.1 0.1"
+      rotation="0 0 0">
+    </a-entity>
   </a-marker>
 
   <a-entity camera></a-entity>
 </a-scene>
 
 <div id="landing">
-  <h1>AR · CUBE TEST</h1>
-  <p>Point your camera at the Hiro marker.<br/>A red cube will appear on it.</p>
-  <!-- Hiro image from the exact same source AR.js master uses -->
-  <img src="https://raw.githack.com/AR-js-org/AR.js/master/data/images/hiro.png"
-       alt="Hiro marker"/>
+  <h1>CFD AR</h1>
+  <p>Point your camera at the Hiro marker.<br/>Your model will appear on it.</p>
+  <img src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/data/images/hiro.png" alt="Hiro marker"/>
   <small>Print this or display on another screen.<br/>Hold ~30 cm away in good light.<br/>Two fingers to zoom.</small>
   <button id="btn-launch">Open Camera</button>
 </div>
@@ -176,41 +152,38 @@
 const debugEl = document.getElementById('debug');
 function dbg(msg) { console.log('[AR]', msg); debugEl.textContent = msg; }
 
-// ── Sizing ────────────────────────────────────────────────────────────
 let currentScale = 1.0;
 function fixSizing() {
   document.querySelectorAll('video').forEach(v => {
-    v.style.position  = 'fixed';
-    v.style.top       = '50%';
-    v.style.left      = '50%';
-    v.style.transform = `translate(-50%,-50%) scale(${currentScale})`;
-    v.style.minWidth  = '100vw';
-    v.style.minHeight = '100vh';
-    v.style.width     = 'auto';
-    v.style.height    = 'auto';
-    v.style.zIndex    = '0';
+    v.style.position='fixed'; v.style.top='50%'; v.style.left='50%';
+    v.style.transform=`translate(-50%,-50%) scale(${currentScale})`;
+    v.style.minWidth='100vw'; v.style.minHeight='100vh';
+    v.style.width='auto'; v.style.height='auto'; v.style.zIndex='0';
   });
   document.querySelectorAll('canvas').forEach(c => {
     c.style.position='fixed'; c.style.top='0'; c.style.left='0';
-    c.style.width='100vw'; c.style.height='100vh'; c.style.zIndex='1';
+    c.style.width='100vw'; c.style.height='100vh';
+    c.style.zIndex='2'; c.style.background='transparent';
   });
   const sc = document.querySelector('a-scene');
-  if (sc && sc.renderer) sc.renderer.setSize(window.innerWidth, window.innerHeight);
+  if (sc && sc.renderer) {
+    sc.renderer.setClearColor(0x000000, 0);
+    sc.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
 }
 window.addEventListener('resize', fixSizing);
 
-// ── Pinch zoom ────────────────────────────────────────────────────────
 let pinchStartDist=null, pinchStartScale=1.0, zoomTimer=null;
 const zoomBubble = document.getElementById('zoom-bubble');
 function setScale(s) {
-  currentScale = Math.max(1.0, Math.min(5.0, s));
-  document.querySelectorAll('video').forEach(v => {
-    v.style.transform = `translate(-50%,-50%) scale(${currentScale})`;
+  currentScale=Math.max(1.0,Math.min(5.0,s));
+  document.querySelectorAll('video').forEach(v=>{
+    v.style.transform=`translate(-50%,-50%) scale(${currentScale})`;
   });
-  zoomBubble.textContent = currentScale.toFixed(1)+'×';
+  zoomBubble.textContent=currentScale.toFixed(1)+'×';
   zoomBubble.classList.add('show');
   clearTimeout(zoomTimer);
-  zoomTimer = setTimeout(()=>zoomBubble.classList.remove('show'),1200);
+  zoomTimer=setTimeout(()=>zoomBubble.classList.remove('show'),1200);
 }
 document.addEventListener('touchstart',e=>{
   if(e.touches.length===2){
@@ -227,11 +200,8 @@ document.addEventListener('touchmove',e=>{
 document.addEventListener('touchend',e=>{ if(e.touches.length<2) pinchStartDist=null; });
 document.addEventListener('wheel',e=>{ setScale(currentScale+(e.deltaY<0?0.15:-0.15)); e.preventDefault(); },{passive:false});
 
-// ── Playback ──────────────────────────────────────────────────────────
 const TOTAL=10;
-const COLORS=['#ff0000','#ff6600','#ffcc00','#00ff88','#00c8ff','#0044ff','#aa00ff','#ff00aa','#ffffff','#ff4400'];
 let current=0, playing=false, timer=null;
-const cube=document.getElementById('cube');
 const statusEl=document.getElementById('status');
 const stepInfo=document.getElementById('step-info');
 const scrubber=document.getElementById('scrubber');
@@ -239,11 +209,9 @@ const btnPlay=document.getElementById('btn-play');
 
 function showStep(idx){
   current=Math.max(0,Math.min(TOTAL-1,idx));
-  const angle=(current/TOTAL)*360;
-  cube.setAttribute('rotation',`${angle*0.5} ${angle} ${angle*0.3}`);
-  cube.setAttribute('color',COLORS[current]);
   scrubber.value=current;
-  stepInfo.textContent=`STEP ${current+1}/${TOTAL} — ${Math.round(angle)}°`;
+  stepInfo.textContent=`STEP ${current+1}/${TOTAL}`;
+  dbg(`step ${current+1}/${TOTAL}`);
 }
 function startPlay(){ playing=true; btnPlay.textContent='⏸ PAUSE'; btnPlay.classList.add('active'); tick(); }
 function stopPlay(){  playing=false; btnPlay.textContent='▶ PLAY'; btnPlay.classList.remove('active'); clearTimeout(timer); }
@@ -253,7 +221,6 @@ document.getElementById('btn-prev').addEventListener('click',()=>{stopPlay();sho
 document.getElementById('btn-next').addEventListener('click',()=>{stopPlay();showStep(current+1);});
 scrubber.addEventListener('input',()=>{stopPlay();showStep(+scrubber.value);});
 
-// ── Launch ────────────────────────────────────────────────────────────
 document.getElementById('btn-launch').addEventListener('click',()=>{
   document.getElementById('landing').classList.add('hidden');
   document.getElementById('hud').classList.add('visible');
@@ -262,41 +229,23 @@ document.getElementById('btn-launch').addEventListener('click',()=>{
   setTimeout(fixSizing,2000);
 });
 
-// ── Force canvas transparent so 3D renders over video ────────────────
-function forceCanvasTransparent() {
-  const sc = document.querySelector('a-scene');
-  if (sc && sc.renderer) {
-    sc.renderer.setClearColor(0x000000, 0);  // transparent background
-    sc.renderer.setPixelRatio(window.devicePixelRatio);
-  }
-  document.querySelectorAll('canvas').forEach(c => {
-    c.style.background = 'transparent';
-    c.style.position   = 'fixed';
-    c.style.top        = '0';
-    c.style.left       = '0';
-    c.style.width      = '100vw';
-    c.style.height     = '100vh';
-    c.style.zIndex     = '2';
-  });
-}
-
-// ── Marker events ─────────────────────────────────────────────────────
 document.querySelector('a-scene').addEventListener('loaded',()=>{
-  forceCanvasTransparent();
-  setTimeout(forceCanvasTransparent, 500);
-  setTimeout(forceCanvasTransparent, 2000);
+  fixSizing();
   dbg('ready — show Hiro marker to camera');
   const marker=document.getElementById('marker');
   marker.addEventListener('markerFound',()=>{
     statusEl.textContent='MARKER FOUND ✓';
     statusEl.classList.add('found');
-    dbg('✓ MARKER DETECTED');
+    dbg('✓ marker detected');
   });
   marker.addEventListener('markerLost',()=>{
     statusEl.textContent='SEARCHING FOR MARKER';
     statusEl.classList.remove('found');
     dbg('marker lost');
   });
+  const modelEl=document.getElementById('model');
+  modelEl.addEventListener('model-loaded',()=>dbg('✓ model loaded OK'));
+  modelEl.addEventListener('model-error', ()=>dbg('✗ model failed — check filename'));
 });
 </script>
 </body>
