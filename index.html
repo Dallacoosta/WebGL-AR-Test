@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>CFD AR – Cube Test</title>
+
+<!-- ✅ npm CDN links — no MIME type issues -->
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.4.2/dist/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js"></script>
+
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Courier New', monospace; }
+
+  #landing {
+    position:fixed; inset:0; z-index:999;
+    background:#030a14;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+  }
+  #landing h1 { color:#00c8ff; font-size:2rem; letter-spacing:4px; }
+  #landing p  { color:rgba(255,255,255,0.45); font-size:11px; letter-spacing:2px; text-align:center; max-width:280px; line-height:1.8; }
+  #landing img { width:180px; height:180px; border:1px solid rgba(0,200,255,0.3); padding:12px; background:#fff; }
+  #landing small { color:rgba(0,200,255,0.5); font-size:9px; letter-spacing:3px; }
+  #btn-launch {
+    background:transparent; border:1px solid #00c8ff; color:#00c8ff;
+    font-family:inherit; font-size:11px; letter-spacing:3px;
+    padding:14px 40px; cursor:pointer; text-transform:uppercase;
+  }
+  #btn-launch:hover { background:#00c8ff; color:#000; }
+
+  #hud { position:fixed; inset:0; z-index:100; pointer-events:none; display:none; }
+  #status {
+    position:absolute; top:16px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.6); border:1px solid rgba(0,200,255,0.3);
+    color:#00c8ff; font-size:9px; letter-spacing:3px; padding:6px 16px; white-space:nowrap;
+  }
+  #status.found { color:#00ff88; border-color:rgba(0,255,136,0.4); }
+
+  #playbar {
+    position:absolute; bottom:0; left:0; right:0;
+    padding:16px 24px 36px;
+    background:linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+    pointer-events:all;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+  }
+  #step-info { font-size:10px; letter-spacing:2px; color:rgba(255,255,255,0.5); }
+  #scrubber {
+    width:100%; max-width:400px; -webkit-appearance:none;
+    height:3px; background:rgba(255,255,255,0.15); outline:none; cursor:pointer;
+  }
+  #scrubber::-webkit-slider-thumb {
+    -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#00c8ff; border:2px solid #000; box-shadow:0 0 8px rgba(0,200,255,0.7);
+  }
+  #btn-row { display:flex; gap:10px; }
+  .pb-btn {
+    background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2);
+    color:#fff; font-family:inherit; font-size:9px; letter-spacing:2px;
+    padding:8px 20px; cursor:pointer; text-transform:uppercase;
+  }
+  .pb-btn:hover  { border-color:#00c8ff; color:#00c8ff; }
+  .pb-btn.active { border-color:#00c8ff; color:#00c8ff; background:rgba(0,200,255,0.1); }
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing">
+  <h1>AR · CUBE TEST</h1>
+  <p>Point your camera at the Hiro marker. A rotating cube will appear on it.</p>
+  <!-- Hiro marker from npm CDN — same fix -->
+  <img src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/data/images/hiro.png" alt="Hiro marker"/>
+  <small>Print this or open it on another screen</small>
+  <button id="btn-launch">Open Camera</button>
+</div>
+
+<!-- AR SCENE -->
+<a-scene id="arScene"
+  style="display:none;"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false;"
+  renderer="antialias: true; logarithmicDepthBuffer: true;"
+  vr-mode-ui="enabled: false"
+  loading-screen="enabled: false">
+
+  <a-marker id="marker" preset="hiro">
+    <a-box id="cube"
+      position="0 0.5 0"
+      width="1" height="1" depth="1"
+      color="#00c8ff"
+      opacity="0.9">
+    </a-box>
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="status">SEARCHING FOR MARKER</div>
+  <div id="playbar">
+    <div id="step-info">STEP 1 / 10</div>
+    <input type="range" id="scrubber" min="0" max="9" value="0" step="1"/>
+    <div id="btn-row">
+      <button class="pb-btn" id="btn-prev">◀◀</button>
+      <button class="pb-btn" id="btn-play">▶ PLAY</button>
+      <button class="pb-btn" id="btn-next">▶▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOTAL  = 10;
+const COLORS = ['#00c8ff','#ff4444','#44ff88','#ffaa00','#ff44ff',
+                 '#ffff44','#44aaff','#ff8844','#88ff44','#ff4488'];
+
+let current = 0;
+let playing = false;
+let timer   = null;
+
+const cube     = document.getElementById('cube');
+const statusEl = document.getElementById('status');
+const stepInfo = document.getElementById('step-info');
+const scrubber = document.getElementById('scrubber');
+const btnPlay  = document.getElementById('btn-play');
+
+function showStep(idx) {
+  current = Math.max(0, Math.min(TOTAL - 1, idx));
+  const angle = (current / TOTAL) * 360;
+  cube.setAttribute('rotation', `${angle * 0.5} ${angle} ${angle * 0.3}`);
+  cube.setAttribute('color', COLORS[current]);
+  scrubber.value = current;
+  stepInfo.textContent = `STEP ${current + 1} / ${TOTAL}  —  rotation ${Math.round(angle)}°`;
+}
+
+function startPlay() {
+  playing = true;
+  btnPlay.textContent = '⏸ PAUSE';
+  btnPlay.classList.add('active');
+  tick();
+}
+function stopPlay() {
+  playing = false;
+  btnPlay.textContent = '▶ PLAY';
+  btnPlay.classList.remove('active');
+  clearTimeout(timer);
+}
+function tick() {
+  timer = setTimeout(() => {
+    showStep((current + 1) % TOTAL);
+    if (playing) tick();
+  }, 400);
+}
+
+btnPlay.addEventListener('click',   () => playing ? stopPlay() : startPlay());
+document.getElementById('btn-prev').addEventListener('click', () => { stopPlay(); showStep(current - 1); });
+document.getElementById('btn-next').addEventListener('click', () => { stopPlay(); showStep(current + 1); });
+scrubber.addEventListener('input',  () => { stopPlay(); showStep(+scrubber.value); });
+
+document.getElementById('btn-launch').addEventListener('click', () => {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('arScene').style.display = 'block';
+  document.getElementById('hud').style.display     = 'block';
+  showStep(0);
+
+  const scene = document.getElementById('arScene');
+  scene.addEventListener('loaded', () => {
+    const marker = document.getElementById('marker');
+    marker.addEventListener('markerFound', () => {
+      statusEl.textContent = 'MARKER FOUND ✓';
+      statusEl.classList.add('found');
+    });
+    marker.addEventListener('markerLost', () => {
+      statusEl.textContent = 'SEARCHING FOR MARKER';
+      statusEl.classList.remove('found');
+    });
+  });
+});
+</script>
+</body>
+</html>
