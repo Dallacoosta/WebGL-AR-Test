@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>CFD AR – Cube Test</title>
+<title>CFD AR Viewer</title>
 
-<!-- Exact URLs from official AR.js documentation -->
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
@@ -25,16 +24,14 @@
     position:fixed !important;
     top:0 !important; left:0 !important;
     width:100vw !important; height:100vh !important;
-    z-index:2 !important;  /* above video which is z-index:0 */
+    z-index:2 !important;
+    background:transparent !important;
   }
   a-scene {
     position:fixed !important;
     top:0 !important; left:0 !important;
     width:100vw !important; height:100vh !important;
-    background: transparent !important;
   }
-  /* AR.js internal canvas must be transparent */
-  canvas { background: transparent !important; }
 
   #landing {
     position:fixed; inset:0; z-index:999;
@@ -107,40 +104,32 @@
   embedded
   arjs="sourceType: webcam; debugUIEnabled: false;"
   renderer="antialias: true; logarithmicDepthBuffer: true; alpha: true;"
-  webxr="optionalFeatures: hit-test,local-floor"
   vr-mode-ui="enabled: false"
   loading-screen="enabled: false">
+
+  <a-assets>
+    <!--
+      ══════════════════════════════════════════════
+      PUT YOUR GLTF FILE NAME HERE
+      Upload your .glb or .gltf file to the same
+      folder as index.html in your GitHub repo,
+      then set the src below to match the filename.
+      Example: src="model.glb"
+      ══════════════════════════════════════════════
+    -->
+    <a-asset-item id="cfd-model" src="model.glb"></a-asset-item>
+  </a-assets>
 
   <a-marker preset="hiro" id="marker"
     smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
 
-    <!-- Flat plane ON the marker surface — visible from any angle -->
-    <a-plane
+    <a-entity
+      id="model"
+      gltf-model="#cfd-model"
       position="0 0 0"
-      rotation="-90 0 0"
-      width="2" height="2"
-      color="#FF0000"
-      opacity="1"
-      side="double">
-    </a-plane>
-
-    <!-- Tall box above the marker — hard to miss -->
-    <a-box id="cube"
-      position="0 1 0"
-      width="1" height="2" depth="1"
-      color="#FF0000"
-      opacity="1"
-      side="double">
-    </a-box>
-
-    <!-- Text label floating above -->
-    <a-text
-      value="AR WORKS"
-      position="0 2.5 0"
-      align="center"
-      color="#ffffff"
-      scale="2 2 2">
-    </a-text>
+      scale="0.1 0.1 0.1"
+      rotation="0 0 0">
+    </a-entity>
 
   </a-marker>
 
@@ -148,11 +137,9 @@
 </a-scene>
 
 <div id="landing">
-  <h1>AR · CUBE TEST</h1>
-  <p>Point your camera at the Hiro marker.<br/>A red cube will appear on it.</p>
-  <!-- Hiro image from the exact same source AR.js master uses -->
-  <img src="https://raw.githack.com/AR-js-org/AR.js/master/data/images/hiro.png"
-       alt="Hiro marker"/>
+  <h1>CFD AR</h1>
+  <p>Point your camera at the Hiro marker.<br/>Your model will appear on it.</p>
+  <img src="https://raw.githack.com/AR-js-org/AR.js/master/data/images/hiro.png" alt="Hiro marker"/>
   <small>Print this or display on another screen.<br/>Hold ~30 cm away in good light.<br/>Two fingers to zoom.</small>
   <button id="btn-launch">Open Camera</button>
 </div>
@@ -191,11 +178,19 @@ function fixSizing() {
     v.style.zIndex    = '0';
   });
   document.querySelectorAll('canvas').forEach(c => {
-    c.style.position='fixed'; c.style.top='0'; c.style.left='0';
-    c.style.width='100vw'; c.style.height='100vh'; c.style.zIndex='1';
+    c.style.position   = 'fixed';
+    c.style.top        = '0';
+    c.style.left       = '0';
+    c.style.width      = '100vw';
+    c.style.height     = '100vh';
+    c.style.zIndex     = '2';
+    c.style.background = 'transparent';
   });
   const sc = document.querySelector('a-scene');
-  if (sc && sc.renderer) sc.renderer.setSize(window.innerWidth, window.innerHeight);
+  if (sc && sc.renderer) {
+    sc.renderer.setClearColor(0x000000, 0);
+    sc.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
 }
 window.addEventListener('resize', fixSizing);
 
@@ -229,21 +224,20 @@ document.addEventListener('wheel',e=>{ setScale(currentScale+(e.deltaY<0?0.15:-0
 
 // ── Playback ──────────────────────────────────────────────────────────
 const TOTAL=10;
-const COLORS=['#ff0000','#ff6600','#ffcc00','#00ff88','#00c8ff','#0044ff','#aa00ff','#ff00aa','#ffffff','#ff4400'];
 let current=0, playing=false, timer=null;
-const cube=document.getElementById('cube');
-const statusEl=document.getElementById('status');
-const stepInfo=document.getElementById('step-info');
-const scrubber=document.getElementById('scrubber');
-const btnPlay=document.getElementById('btn-play');
+const model    = document.getElementById('model');
+const statusEl = document.getElementById('status');
+const stepInfo = document.getElementById('step-info');
+const scrubber = document.getElementById('scrubber');
+const btnPlay  = document.getElementById('btn-play');
 
 function showStep(idx){
-  current=Math.max(0,Math.min(TOTAL-1,idx));
-  const angle=(current/TOTAL)*360;
-  cube.setAttribute('rotation',`${angle*0.5} ${angle} ${angle*0.3}`);
-  cube.setAttribute('color',COLORS[current]);
-  scrubber.value=current;
-  stepInfo.textContent=`STEP ${current+1}/${TOTAL} — ${Math.round(angle)}°`;
+  current = Math.max(0, Math.min(TOTAL-1, idx));
+  scrubber.value = current;
+  stepInfo.textContent = `STEP ${current+1}/${TOTAL}`;
+  // ── Hook your timestep logic here ──
+  // e.g. swap visibility of child entities, update shader uniforms, etc.
+  dbg(`step ${current+1}/${TOTAL}`);
 }
 function startPlay(){ playing=true; btnPlay.textContent='⏸ PAUSE'; btnPlay.classList.add('active'); tick(); }
 function stopPlay(){  playing=false; btnPlay.textContent='▶ PLAY'; btnPlay.classList.remove('active'); clearTimeout(timer); }
@@ -258,45 +252,31 @@ document.getElementById('btn-launch').addEventListener('click',()=>{
   document.getElementById('landing').classList.add('hidden');
   document.getElementById('hud').classList.add('visible');
   showStep(0);
-  setTimeout(fixSizing,800);
-  setTimeout(fixSizing,2000);
+  setTimeout(fixSizing, 800);
+  setTimeout(fixSizing, 2000);
 });
 
-// ── Force canvas transparent so 3D renders over video ────────────────
-function forceCanvasTransparent() {
-  const sc = document.querySelector('a-scene');
-  if (sc && sc.renderer) {
-    sc.renderer.setClearColor(0x000000, 0);  // transparent background
-    sc.renderer.setPixelRatio(window.devicePixelRatio);
-  }
-  document.querySelectorAll('canvas').forEach(c => {
-    c.style.background = 'transparent';
-    c.style.position   = 'fixed';
-    c.style.top        = '0';
-    c.style.left       = '0';
-    c.style.width      = '100vw';
-    c.style.height     = '100vh';
-    c.style.zIndex     = '2';
-  });
-}
-
-// ── Marker events ─────────────────────────────────────────────────────
+// ── Scene loaded ──────────────────────────────────────────────────────
 document.querySelector('a-scene').addEventListener('loaded',()=>{
-  forceCanvasTransparent();
-  setTimeout(forceCanvasTransparent, 500);
-  setTimeout(forceCanvasTransparent, 2000);
+  fixSizing();
   dbg('ready — show Hiro marker to camera');
-  const marker=document.getElementById('marker');
+
+  const marker = document.getElementById('marker');
   marker.addEventListener('markerFound',()=>{
     statusEl.textContent='MARKER FOUND ✓';
     statusEl.classList.add('found');
-    dbg('✓ MARKER DETECTED');
+    dbg('✓ marker detected — model should appear');
   });
   marker.addEventListener('markerLost',()=>{
     statusEl.textContent='SEARCHING FOR MARKER';
     statusEl.classList.remove('found');
     dbg('marker lost');
   });
+
+  // Log model load result
+  const modelEl = document.getElementById('model');
+  modelEl.addEventListener('model-loaded', ()=> dbg('✓ GLTF model loaded OK'));
+  modelEl.addEventListener('model-error',  ()=> dbg('✗ GLTF model FAILED to load — check filename'));
 });
 </script>
 </body>
