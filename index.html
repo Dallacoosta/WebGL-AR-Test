@@ -25,13 +25,16 @@
     position:fixed !important;
     top:0 !important; left:0 !important;
     width:100vw !important; height:100vh !important;
-    z-index:1 !important;
+    z-index:2 !important;  /* above video which is z-index:0 */
   }
   a-scene {
     position:fixed !important;
     top:0 !important; left:0 !important;
     width:100vw !important; height:100vh !important;
+    background: transparent !important;
   }
+  /* AR.js internal canvas must be transparent */
+  canvas { background: transparent !important; }
 
   #landing {
     position:fixed; inset:0; z-index:999;
@@ -103,7 +106,8 @@
 <a-scene
   embedded
   arjs="sourceType: webcam; debugUIEnabled: false;"
-  renderer="antialias: true; logarithmicDepthBuffer: true;"
+  renderer="antialias: true; logarithmicDepthBuffer: true; alpha: true;"
+  webxr="optionalFeatures: hit-test,local-floor"
   vr-mode-ui="enabled: false"
   loading-screen="enabled: false">
 
@@ -258,8 +262,29 @@ document.getElementById('btn-launch').addEventListener('click',()=>{
   setTimeout(fixSizing,2000);
 });
 
+// ── Force canvas transparent so 3D renders over video ────────────────
+function forceCanvasTransparent() {
+  const sc = document.querySelector('a-scene');
+  if (sc && sc.renderer) {
+    sc.renderer.setClearColor(0x000000, 0);  // transparent background
+    sc.renderer.setPixelRatio(window.devicePixelRatio);
+  }
+  document.querySelectorAll('canvas').forEach(c => {
+    c.style.background = 'transparent';
+    c.style.position   = 'fixed';
+    c.style.top        = '0';
+    c.style.left       = '0';
+    c.style.width      = '100vw';
+    c.style.height     = '100vh';
+    c.style.zIndex     = '2';
+  });
+}
+
 // ── Marker events ─────────────────────────────────────────────────────
 document.querySelector('a-scene').addEventListener('loaded',()=>{
+  forceCanvasTransparent();
+  setTimeout(forceCanvasTransparent, 500);
+  setTimeout(forceCanvasTransparent, 2000);
   dbg('ready — show Hiro marker to camera');
   const marker=document.getElementById('marker');
   marker.addEventListener('markerFound',()=>{
