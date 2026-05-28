@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>CFD AR Viewer</title>
+
+<script src="aframe.min.js"></script>
+<script src="aframe-ar.js"></script>
+
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Courier New', monospace; }
+
+  video {
+    position:fixed !important;
+    top:50% !important; left:50% !important;
+    transform:translate(-50%,-50%) !important;
+    min-width:100vw !important; min-height:100vh !important;
+    width:auto !important; height:auto !important;
+    z-index:0 !important;
+  }
+  canvas {
+    position:fixed !important;
+    top:0 !important; left:0 !important;
+    width:100vw !important; height:100vh !important;
+    z-index:2 !important;
+    background:transparent !important;
+  }
+  a-scene {
+    position:fixed !important;
+    top:0 !important; left:0 !important;
+    width:100vw !important; height:100vh !important;
+  }
+
+  /* ── Landing ── */
+  #landing {
+    position:fixed; inset:0; z-index:999;
+    background:#030a14;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    transition:opacity 0.4s;
+  }
+  #landing.hidden { opacity:0; pointer-events:none; }
+  #landing h1    { color:#00c8ff; font-size:2.2rem; letter-spacing:4px; }
+  #landing p     { color:rgba(255,255,255,0.5); font-size:11px; letter-spacing:2px;
+                   text-align:center; max-width:300px; line-height:1.9; }
+  #landing img   { width:180px; height:180px; border:3px solid rgba(0,200,255,0.35);
+                   background:#fff; padding:4px; }
+  #landing small { color:rgba(0,200,255,0.5); font-size:9px; letter-spacing:2px;
+                   text-align:center; max-width:280px; line-height:1.9; }
+  #btn-launch {
+    background:transparent; border:1px solid #00c8ff; color:#00c8ff;
+    font-family:inherit; font-size:11px; letter-spacing:3px;
+    padding:14px 44px; cursor:pointer; text-transform:uppercase;
+    transition:background .2s, color .2s;
+  }
+  #btn-launch:hover { background:#00c8ff; color:#000; }
+  #load-progress {
+    color:rgba(0,200,255,0.6); font-size:9px; letter-spacing:2px;
+    min-height:14px;
+  }
+
+  /* ── HUD ── */
+  #hud { position:fixed; inset:0; z-index:100; pointer-events:none; opacity:0; transition:opacity 0.4s; }
+  #hud.visible { opacity:1; }
+
+  #status {
+    position:absolute; top:16px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.7); border:1px solid rgba(0,200,255,0.3);
+    color:#00c8ff; font-size:9px; letter-spacing:3px; padding:6px 16px; white-space:nowrap;
+  }
+  #status.found { color:#00ff88; border-color:rgba(0,255,136,0.4); }
+
+  #debug {
+    position:absolute; top:52px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.7); color:#ffcc00; font-size:9px; letter-spacing:1px;
+    padding:5px 12px; border:1px solid rgba(255,200,0,0.3);
+    white-space:nowrap; max-width:90vw; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  #zoom-bubble {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.2);
+    color:#fff; font-size:22px; padding:10px 22px; border-radius:4px;
+    opacity:0; transition:opacity 0.2s; pointer-events:none;
+  }
+  #zoom-bubble.show { opacity:1; }
+
+  #playbar {
+    position:absolute; bottom:0; left:0; right:0; padding:16px 24px 36px;
+    background:linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+    pointer-events:all;
+    display:flex; flex-direction:column; align-items:center; gap:12px;
+  }
+  #step-info { font-size:10px; letter-spacing:2px; color:rgba(255,255,255,0.5); }
+  #scrubber {
+    width:100%; max-width:420px; -webkit-appearance:none;
+    height:3px; background:rgba(255,255,255,0.15); outline:none; cursor:pointer;
+  }
+  #scrubber::-webkit-slider-thumb {
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:#00c8ff; border:2px solid #000; box-shadow:0 0 8px rgba(0,200,255,0.7);
+  }
+  #btn-row { display:flex; gap:10px; }
+  .pb-btn {
+    background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.2);
+    color:#fff; font-family:inherit; font-size:9px; letter-spacing:2px;
+    padding:9px 20px; cursor:pointer; text-transform:uppercase;
+    transition:border-color .2s, color .2s;
+  }
+  .pb-btn:hover  { border-color:#00c8ff; color:#00c8ff; }
+  .pb-btn.active { border-color:#00c8ff; color:#00c8ff; background:rgba(0,200,255,0.1); }
+  #btn-play { min-width:88px; }
+</style>
+</head>
+<body>
+
+<a-scene
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false;"
+  renderer="antialias: true; logarithmicDepthBuffer: true; alpha: true;"
+  vr-mode-ui="enabled: false"
+  loading-screen="enabled: false">
+
+  <a-assets id="assets">
+    <!-- frames are injected here dynamically -->
+  </a-assets>
+
+  <a-marker preset="hiro" id="marker"
+    smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
+    <!-- model entity injected here -->
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<!-- ── Landing ── -->
+<div id="landing">
+  <h1>CFD · AR</h1>
+  <p>Point your camera at the Hiro marker.<br/>Your CFD model will appear on it.</p>
+  <img src="hiro.png" alt="Hiro marker"
+       onerror="this.src='https://cdn.jsdelivr.net/npm/ar.js@2.2.2/data/images/hiro.png'"/>
+  <small>
+    Print this marker or display it on another screen.<br/>
+    Hold ~30 cm away · good light · keep it flat.<br/>
+    Pinch to zoom in/out once camera is open.
+  </small>
+  <div id="load-progress">loading config...</div>
+  <button id="btn-launch" disabled>Open Camera</button>
+</div>
+
+<!-- ── HUD ── -->
+<div id="hud">
+  <div id="status">SEARCHING FOR MARKER</div>
+  <div id="debug">loading...</div>
+  <div id="zoom-bubble">1.0×</div>
+  <div id="playbar">
+    <div id="step-info">STEP 1 / 1</div>
+    <input type="range" id="scrubber" min="0" max="0" value="0" step="1"/>
+    <div id="btn-row">
+      <button class="pb-btn" id="btn-prev">◀◀</button>
+      <button class="pb-btn" id="btn-play">▶ PLAY</button>
+      <button class="pb-btn" id="btn-next">▶▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Debug ─────────────────────────────────────────────────────────────
+const debugEl   = document.getElementById('debug');
+const progressEl = document.getElementById('load-progress');
+function dbg(msg) { console.log('[AR]', msg); debugEl.textContent = msg; }
+function prog(msg) { progressEl.textContent = msg; }
+
+// ── State ─────────────────────────────────────────────────────────────
+let frames    = [];   // list of gltf filenames from config.json
+let current   = 0;
+let playing   = false;
+let timer     = null;
+let modelEl   = null; // the <a-entity> inside the marker
+
+// ── Load config.json ──────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const res = await fetch('config.json');
+    if (!res.ok) throw new Error('config.json not found');
+    const cfg = await res.json();
+    frames = cfg.frames || [];
+    if (frames.length === 0) throw new Error('no frames listed in config.json');
+    prog(`config loaded — ${frames.length} frame(s)`);
+    injectAssets();
+  } catch(e) {
+    prog('ERROR: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ── Inject <a-asset-item> for every frame ─────────────────────────────
+function injectAssets() {
+  const assetsEl = document.getElementById('assets');
+  frames.forEach((f, i) => {
+    const item = document.createElement('a-asset-item');
+    item.id  = `frame-${i}`;
+    item.setAttribute('src', f);
+    assetsEl.appendChild(item);
+  });
+
+  // Create the model entity in the marker
+  const marker = document.getElementById('marker');
+  modelEl = document.createElement('a-entity');
+  modelEl.id = 'model';
+  modelEl.setAttribute('gltf-model', `#frame-0`);
+  modelEl.setAttribute('position', '0 0.5 0');
+  modelEl.setAttribute('scale', '1 1 1');
+  modelEl.setAttribute('rotation', '0 180 0');
+  marker.appendChild(modelEl);
+
+  modelEl.addEventListener('model-loaded', () => dbg(`frame ${current + 1} loaded ✓`));
+  modelEl.addEventListener('model-error',  () => dbg(`frame ${current + 1} ERROR — check filename`));
+
+  // Set up scrubber range
+  const scrubber = document.getElementById('scrubber');
+  scrubber.max = frames.length - 1;
+  scrubber.value = 0;
+
+  prog(`ready — ${frames.length} frame(s)`);
+  document.getElementById('btn-launch').disabled = false;
+}
+
+// ── Sizing ────────────────────────────────────────────────────────────
+let currentScale = 1.0;
+function fixSizing() {
+  document.querySelectorAll('video').forEach(v => {
+    v.style.position  = 'fixed';
+    v.style.top       = '50%';
+    v.style.left      = '50%';
+    v.style.transform = `translate(-50%,-50%) scale(${currentScale})`;
+    v.style.minWidth  = '100vw';
+    v.style.minHeight = '100vh';
+    v.style.width     = 'auto';
+    v.style.height    = 'auto';
+    v.style.zIndex    = '0';
+  });
+  document.querySelectorAll('canvas').forEach(c => {
+    c.style.position   = 'fixed';
+    c.style.top        = '0';
+    c.style.left       = '0';
+    c.style.width      = '100vw';
+    c.style.height     = '100vh';
+    c.style.zIndex     = '2';
+    c.style.background = 'transparent';
+  });
+  const sc = document.querySelector('a-scene');
+  if (sc && sc.renderer) {
+    sc.renderer.setClearColor(0x000000, 0);
+    sc.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+}
+window.addEventListener('resize', fixSizing);
+
+// ── Pinch zoom ────────────────────────────────────────────────────────
+let pinchDist0 = null, scale0 = 1.0, zoomTimer = null;
+const zoomBubble = document.getElementById('zoom-bubble');
+function setScale(s) {
+  currentScale = Math.max(1.0, Math.min(5.0, s));
+  document.querySelectorAll('video').forEach(v => {
+    v.style.transform = `translate(-50%,-50%) scale(${currentScale})`;
+  });
+  zoomBubble.textContent = currentScale.toFixed(1) + '×';
+  zoomBubble.classList.add('show');
+  clearTimeout(zoomTimer);
+  zoomTimer = setTimeout(() => zoomBubble.classList.remove('show'), 1200);
+}
+document.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    pinchDist0 = Math.hypot(e.touches[1].clientX - e.touches[0].clientX,
+                            e.touches[1].clientY - e.touches[0].clientY);
+    scale0 = currentScale; e.preventDefault();
+  }
+}, { passive: false });
+document.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && pinchDist0) {
+    const d = Math.hypot(e.touches[1].clientX - e.touches[0].clientX,
+                         e.touches[1].clientY - e.touches[0].clientY);
+    setScale(scale0 * (d / pinchDist0)); e.preventDefault();
+  }
+}, { passive: false });
+document.addEventListener('touchend', e => { if (e.touches.length < 2) pinchDist0 = null; });
+document.addEventListener('wheel', e => {
+  setScale(currentScale + (e.deltaY < 0 ? 0.15 : -0.15));
+  e.preventDefault();
+}, { passive: false });
+
+// ── Playback ──────────────────────────────────────────────────────────
+const statusEl = document.getElementById('status');
+const stepInfo = document.getElementById('step-info');
+const scrubber = document.getElementById('scrubber');
+const btnPlay  = document.getElementById('btn-play');
+
+function showStep(idx) {
+  current = Math.max(0, Math.min(frames.length - 1, idx));
+  scrubber.value = current;
+  stepInfo.textContent = `STEP ${current + 1} / ${frames.length}`;
+  if (modelEl) {
+    modelEl.setAttribute('gltf-model', `#frame-${current}`);
+    dbg(`loading frame ${current + 1} / ${frames.length}...`);
+  }
+}
+function startPlay() { playing = true;  btnPlay.textContent = '⏸ PAUSE'; btnPlay.classList.add('active');    tick(); }
+function stopPlay()  { playing = false; btnPlay.textContent = '▶ PLAY';  btnPlay.classList.remove('active'); clearTimeout(timer); }
+function tick() { timer = setTimeout(() => { showStep((current + 1) % frames.length); if (playing) tick(); }, 400); }
+
+btnPlay.addEventListener('click', () => playing ? stopPlay() : startPlay());
+document.getElementById('btn-prev').addEventListener('click', () => { stopPlay(); showStep(current - 1); });
+document.getElementById('btn-next').addEventListener('click', () => { stopPlay(); showStep(current + 1); });
+scrubber.addEventListener('input', () => { stopPlay(); showStep(+scrubber.value); });
+
+// ── Launch ────────────────────────────────────────────────────────────
+document.getElementById('btn-launch').addEventListener('click', () => {
+  document.getElementById('landing').classList.add('hidden');
+  document.getElementById('hud').classList.add('visible');
+  showStep(0);
+  setTimeout(fixSizing, 800);
+  setTimeout(fixSizing, 2000);
+});
+
+// ── AR events ─────────────────────────────────────────────────────────
+document.querySelector('a-scene').addEventListener('loaded', () => {
+  fixSizing();
+  dbg('AR ready — show Hiro marker to camera');
+  const marker = document.getElementById('marker');
+  marker.addEventListener('markerFound', () => {
+    statusEl.textContent = 'MARKER FOUND ✓';
+    statusEl.classList.add('found');
+    dbg(`marker found ✓ — frame ${current + 1}`);
+  });
+  marker.addEventListener('markerLost', () => {
+    statusEl.textContent = 'SEARCHING FOR MARKER';
+    statusEl.classList.remove('found');
+    dbg('marker lost');
+  });
+});
+
+// ── Start ─────────────────────────────────────────────────────────────
+loadConfig();
+</script>
+</body>
+</html>
