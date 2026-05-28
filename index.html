@@ -715,12 +715,6 @@ async function startAR() {
     track.addEventListener('click', scrubTo);
     track.addEventListener('touchstart', scrubTo, { passive: true });
 
-    // Add debug plane to pivot (not anchor.group directly)
-    const debugGeo = new THREE.PlaneGeometry(1, 1);
-    const debugMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
-    const debugPlane = new THREE.Mesh(debugGeo, debugMat);
-    pivot.add(debugPlane);
-
     // Load first step immediately
     showStep(0);
 
