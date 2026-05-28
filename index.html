@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>CFD AR Viewer</title>
+<title>CFD AR Viewer v3</title>
 
-<script src="aframe.min.js"></script>
+<script src="aframe.min.js?v=3"></script>
 <script src="aframe-ar.js"></script>
 
 <style>
@@ -210,36 +210,21 @@ function injectAssets() {
   modelEl.setAttribute('rotation', '0 180 0');
   marker.appendChild(modelEl);
 
+  // Show elapsed time so we know its alive
+  let secs = 0;
+  const loadTimer = setInterval(() => {
+    secs++;
+    prog(`loading model... ${secs}s`);
+  }, 1000);
+
   modelEl.addEventListener('model-loaded', () => {
-    dbg(`frame ${current + 1} loaded ✓`);
-    prog('model ready!');
+    clearInterval(loadTimer);
+    prog('model ready — show Hiro marker!');
   });
   modelEl.addEventListener('model-error', (e) => {
-    const detail = e.detail && e.detail.src ? e.detail.src : 'unknown';
-    dbg(`frame ${current + 1} ERROR — ${detail}`);
-    console.error('[AR] model-error detail:', e.detail);
+    clearInterval(loadTimer);
+    prog('model load FAILED: ' + JSON.stringify(e.detail));
   });
-
-  // Monitor fetch progress manually
-  prog('fetching model file...');
-  fetch(frames[0])
-    .then(r => {
-      if (!r.ok) { prog(`HTTP ${r.status} loading ${frames[0]}`); return; }
-      const total = r.headers.get('content-length');
-      const reader = r.body.getReader();
-      let received = 0;
-      function read() {
-        return reader.read().then(({done, value}) => {
-          if (done) { prog('download done — parsing model...'); return; }
-          received += value.length;
-          const pct = total ? Math.round(received/total*100) : received;
-          prog(`downloading... ${total ? pct+'%' : Math.round(received/1024)+'KB'}`);
-          return read();
-        });
-      }
-      return read();
-    })
-    .catch(e => prog('fetch error: ' + e.message));
 
   // Set by direct URL, not #id reference
   modelEl.setAttribute('gltf-model', frames[0]);
