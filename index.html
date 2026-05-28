@@ -5,29 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
 <title>CFD · AR Viewer</title>
 
-<!-- MindAR + Three.js: loaded sequentially to guarantee correct order -->
+<!-- MindAR v1.1.5 bundles Three.js — works as a plain global script -->
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image-three.prod.js"></script>
 <script>
-  function loadScript(src) {
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = src;
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Failed to load: ' + src));
-      document.head.appendChild(s);
-    });
-  }
-
-  window._libsReady = (async () => {
-    try {
-      await loadScript('https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js');
-      await loadScript('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js');
-      await loadScript('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/DRACOLoader.js');
-      await loadScript('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js');
-    } catch(e) {
-      document.getElementById('status-msg').textContent = 'ERROR: ' + e.message;
-      throw e;
-    }
-  })();
+  // _libsReady resolves immediately since script is loaded synchronously above
+  window._libsReady = Promise.resolve();
 </script>
 
 <style>
@@ -510,7 +492,6 @@ async function startAR() {
   landing.classList.add('hidden');
   hud.classList.add('visible');
   setStatus('starting camera...');
-  await window._libsReady;
 
   try {
     mindarThree = new window.MINDAR.IMAGE.MindARThree({
@@ -522,6 +503,9 @@ async function startAR() {
     });
 
     const { renderer, scene, camera } = mindarThree;
+
+    // THREE is bundled inside MindAR v1.1.5
+    const THREE = window.MINDAR.IMAGE.THREE;
 
     // Lighting — good quality for metallic CFD surfaces
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -603,12 +587,8 @@ async function startAR() {
     }, { passive: true });
 
     // ── GLTF Loader ──
+    // GLTFLoader is bundled with MindAR v1.1.5
     const loader = new THREE.GLTFLoader();
-
-    // Optional: DRACO compressed GLBs load faster — set decoder path
-    const draco = new THREE.DRACOLoader();
-    draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/libs/draco/');
-    loader.setDRACOLoader(draco);
 
     function loadStep(index) {
       return new Promise((resolve, reject) => {
@@ -750,16 +730,7 @@ document.getElementById('btn-next').addEventListener('click', () => {
 btnLaunch.addEventListener('click', startAR);
 
 // ── Boot ──────────────────────────────────────────────
-(async () => {
-  setStatus('loading libraries...');
-  try {
-    await window._libsReady;
-  } catch(e) {
-    setStatus('ERROR: could not load AR libraries. Check your connection.');
-    return;
-  }
-  loadManifest();
-})();
+loadManifest();
 </script>
 </body>
 </html>
