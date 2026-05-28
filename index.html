@@ -710,11 +710,7 @@ async function startAR() {
     track.addEventListener('click', scrubTo);
     track.addEventListener('touchstart', scrubTo, { passive: true });
 
-    // ── Start MindAR ──
-    await mindarThree.start();
-    setStatus('AR started — point at marker');
-
-    // Solid bright debug plane — if this shows up the anchor works
+    // Add debug plane BEFORE start()
     const debugGeo = new THREE.PlaneGeometry(1, 1);
     const debugMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
     const debugPlane = new THREE.Mesh(debugGeo, debugMat);
@@ -723,9 +719,12 @@ async function startAR() {
     // Load first step immediately
     showStep(0);
 
-    // Render loop
+    // ── Start MindAR ──
+    await mindarThree.start();
+    setStatus('AR started — point at marker');
+
+    // Render loop — no manual update() needed, MindAR handles it internally
     renderer.setAnimationLoop(() => {
-      mindarThree.update();
       renderer.render(scene, camera);
     });
 
