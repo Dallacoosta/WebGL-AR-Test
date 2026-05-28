@@ -198,36 +198,47 @@ async function loadConfig() {
 // ── Inject <a-asset-item> for every frame ─────────────────────────────
 function injectAssets() {
   const assetsEl = document.getElementById('assets');
+  let loaded = 0;
+
   frames.forEach((f, i) => {
     const item = document.createElement('a-asset-item');
     item.id  = `frame-${i}`;
     item.setAttribute('src', f);
+    item.addEventListener('loaded', () => {
+      loaded++;
+      prog(`loading... ${loaded}/${frames.length}`);
+      if (loaded === frames.length) onAssetsReady();
+    });
+    item.addEventListener('error', () => {
+      prog(`ERROR loading ${f} — check file is in repo`);
+    });
     assetsEl.appendChild(item);
   });
 
-  // Create the model entity in the marker
+  const scrubber = document.getElementById('scrubber');
+  scrubber.max = frames.length - 1;
+  scrubber.value = 0;
+  prog(`loading... 0/${frames.length}`);
+}
+
+function onAssetsReady() {
+  prog('assets ready — building model');
   const marker = document.getElementById('marker');
   modelEl = document.createElement('a-entity');
   modelEl.id = 'model';
-  modelEl.setAttribute('gltf-model', `#frame-0`);
   modelEl.setAttribute('position', '0 0.5 0');
   modelEl.setAttribute('scale', '1 1 1');
   modelEl.setAttribute('rotation', '0 180 0');
   marker.appendChild(modelEl);
 
   modelEl.addEventListener('model-loaded', () => dbg(`frame ${current + 1} loaded ✓`));
-  modelEl.addEventListener('model-error',  (e) => {
+  modelEl.addEventListener('model-error', (e) => {
     const detail = e.detail && e.detail.src ? e.detail.src : 'unknown';
     dbg(`frame ${current + 1} ERROR — ${detail}`);
     console.error('[AR] model-error detail:', e.detail);
   });
 
-  // Set up scrubber range
-  const scrubber = document.getElementById('scrubber');
-  scrubber.max = frames.length - 1;
-  scrubber.value = 0;
-
-  prog(`ready — ${frames.length} frame(s)`);
+  modelEl.setAttribute('gltf-model', '#frame-0');
   document.getElementById('btn-launch').disabled = false;
 }
 
