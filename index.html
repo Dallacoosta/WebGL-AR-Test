@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>CFD · AR Viewer</title>
+
+<!-- MindAR + Three.js -->
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/DRACOLoader.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan:    #00e5ff;
+    --orange:  #ff6d00;
+    --dark:    #050a0f;
+    --panel:   rgba(5,10,15,0.82);
+    --border:  rgba(0,229,255,0.2);
+    --mono:    'Share Tech Mono', monospace;
+    --sans:    'Barlow', sans-serif;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--dark);
+    color: #fff;
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+
+  /* ── MindAR container ── */
+  #mindar-container {
+    position: fixed; inset: 0;
+    z-index: 0;
+  }
+
+  /* ── Landing screen ── */
+  #landing {
+    position: fixed; inset: 0;
+    z-index: 200;
+    background: var(--dark);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    transition: opacity 0.5s;
+  }
+  #landing.hidden { opacity: 0; pointer-events: none; }
+
+  .landing-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% 60%, rgba(0,229,255,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 80% 20%, rgba(255,109,0,0.05) 0%, transparent 60%);
+  }
+
+  .grid-lines {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .landing-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    padding: 0 32px;
+    max-width: 480px;
+    width: 100%;
+  }
+
+  .logo-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: var(--cyan);
+    opacity: 0.6;
+  }
+
+  .logo-title {
+    font-family: var(--mono);
+    font-size: clamp(2.4rem, 8vw, 3.6rem);
+    letter-spacing: 4px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .logo-title span { color: var(--cyan); }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.3;
+  }
+
+  .marker-card {
+    border: 1px solid var(--border);
+    background: rgba(0,229,255,0.04);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .marker-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    opacity: 0.5;
+  }
+
+  #marker-preview {
+    width: 140px;
+    height: 140px;
+    object-fit: contain;
+    background: #fff;
+    padding: 6px;
+  }
+
+  .marker-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  #status-msg {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 2px;
+    min-height: 16px;
+    text-align: center;
+  }
+
+  #btn-launch {
+    width: 100%;
+    padding: 16px;
+    background: transparent;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  #btn-launch::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--cyan);
+    transform: translateX(-100%);
+    transition: transform 0.25s;
+  }
+  #btn-launch:hover::before,
+  #btn-launch:not([disabled]):active::before { transform: translateX(0); }
+  #btn-launch:hover,
+  #btn-launch:not([disabled]):active { color: var(--dark); }
+  #btn-launch span { position: relative; }
+  #btn-launch[disabled] { opacity: 0.35; cursor: not-allowed; border-color: rgba(0,229,255,0.3); }
+
+  /* ── HUD (shown during AR) ── */
+  #hud {
+    position: fixed; inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  #hud.visible { opacity: 1; }
+
+  /* top bar */
+  #top-bar {
+    position: absolute;
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .pill {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+  }
+
+  #marker-status { color: var(--cyan); }
+  #marker-status.found { color: #00ff88; border-color: rgba(0,255,136,0.3); }
+
+  #step-pill { color: rgba(255,255,255,0.5); }
+
+  /* bottom playbar */
+  #playbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 20px 24px 40px;
+    background: linear-gradient(to top, rgba(5,10,15,0.9) 0%, transparent 100%);
+    pointer-events: all;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* progress bar */
+  #progress-track {
+    width: 100%;
+    max-width: 480px;
+    height: 2px;
+    background: rgba(255,255,255,0.1);
+    position: relative;
+    cursor: pointer;
+  }
+  #progress-fill {
+    height: 100%;
+    background: var(--cyan);
+    width: 0%;
+    transition: width 0.1s;
+  }
+  #progress-thumb {
+    position: absolute;
+    top: 50%; transform: translate(-50%,-50%);
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    border: 2px solid var(--dark);
+    box-shadow: 0 0 10px var(--cyan);
+    left: 0%;
+    transition: left 0.1s;
+  }
+
+  /* preload dots */
+  #preload-dots {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+  }
+  .dot {
+    flex: 1;
+    height: 2px;
+    background: rgba(255,255,255,0.1);
+    max-width: 24px;
+  }
+  .dot.loaded  { background: rgba(0,229,255,0.4); }
+  .dot.current { background: var(--cyan); }
+
+  /* buttons */
+  #btn-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .ctrl-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .ctrl-btn:hover  { border-color: var(--cyan); color: var(--cyan); }
+  .ctrl-btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,229,255,0.08); }
+  .ctrl-btn.wide   { min-width: 100px; text-align: center; }
+
+  /* scale hint */
+  #scale-hint {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.25);
+  }
+
+  /* error overlay */
+  #error-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 300;
+    background: rgba(5,10,15,0.95);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    padding: 32px;
+  }
+  #error-overlay.show { display: flex; }
+  #error-msg {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--orange);
+    letter-spacing: 2px;
+    text-align: center;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<!-- MindAR will inject video + canvas here -->
+<div id="mindar-container"></div>
+
+<!-- Landing -->
+<div id="landing">
+  <div class="landing-bg"></div>
+  <div class="grid-lines"></div>
+  <div class="landing-content">
+    <div class="logo-block">
+      <div class="logo-label">AUGMENTED REALITY</div>
+      <div class="logo-title">CFD<span>·</span>AR</div>
+    </div>
+    <div class="divider"></div>
+    <div class="marker-card">
+      <div class="marker-label">TARGET MARKER</div>
+      <img id="marker-preview" src="marker.png" alt="AR Marker"
+           onerror="this.style.display='none'"/>
+      <div class="marker-hint">
+        Print this marker or display it on a second screen.<br/>
+        Hold flat · good light · 20–40 cm away
+      </div>
+    </div>
+    <div id="status-msg">initializing...</div>
+    <button id="btn-launch" disabled><span>OPEN CAMERA</span></button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="top-bar">
+    <div class="pill" id="marker-status">SEARCHING FOR MARKER</div>
+    <div class="pill" id="step-pill">STEP 1 / 1</div>
+  </div>
+
+  <div id="playbar">
+    <div id="preload-dots"></div>
+
+    <div id="progress-track">
+      <div id="progress-fill"></div>
+      <div id="progress-thumb"></div>
+    </div>
+
+    <div id="btn-row">
+      <button class="ctrl-btn" id="btn-prev">◀◀</button>
+      <button class="ctrl-btn wide" id="btn-play">▶ PLAY</button>
+      <button class="ctrl-btn" id="btn-next">▶▶</button>
+    </div>
+
+    <div id="scale-hint">PINCH TO SCALE · DRAG TO ROTATE</div>
+  </div>
+</div>
+
+<!-- Error -->
+<div id="error-overlay">
+  <div class="pill" style="color:var(--orange);border-color:rgba(255,109,0,0.3)">ERROR</div>
+  <div id="error-msg"></div>
+  <button class="ctrl-btn" onclick="location.reload()">RELOAD</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG — edit manifest.json to point to your GLB files
+// ═══════════════════════════════════════════════════════
+let STEPS = [];          // filled from manifest.json
+let currentStep = 0;
+let playing = false;
+let playTimer = null;
+const PLAY_INTERVAL = 500; // ms per step
+
+// Loaded Three.js objects per step (null = not yet loaded)
+const loadedModels = [];
+let activeModel = null;
+let anchor = null;       // MindAR anchor group
+
+// ── DOM refs ──────────────────────────────────────────
+const statusMsg    = document.getElementById('status-msg');
+const btnLaunch    = document.getElementById('btn-launch');
+const hud          = document.getElementById('hud');
+const landing      = document.getElementById('landing');
+const markerStatus = document.getElementById('marker-status');
+const stepPill     = document.getElementById('step-pill');
+const progressFill = document.getElementById('progress-fill');
+const progressThumb= document.getElementById('progress-thumb');
+const preloadDots  = document.getElementById('preload-dots');
+const btnPlay      = document.getElementById('btn-play');
+const errorOverlay = document.getElementById('error-overlay');
+const errorMsg     = document.getElementById('error-msg');
+
+function setStatus(msg) { statusMsg.textContent = msg; }
+function showError(msg)  {
+  errorMsg.textContent = msg;
+  errorOverlay.classList.add('show');
+}
+
+// ── Load manifest ─────────────────────────────────────
+async function loadManifest() {
+  setStatus('loading manifest...');
+  try {
+    const r = await fetch('manifest.json');
+    if (!r.ok) throw new Error('manifest.json not found');
+    const data = await r.json();
+    STEPS = data.steps || [];
+    if (!STEPS.length) throw new Error('No steps in manifest.json');
+
+    // Build preload dots
+    if (STEPS.length > 1) {
+      STEPS.forEach((_, i) => {
+        const d = document.createElement('div');
+        d.className = 'dot';
+        d.id = `dot-${i}`;
+        preloadDots.appendChild(d);
+      });
+    }
+
+    // Hide playbar controls if only 1 step
+    if (STEPS.length === 1) {
+      document.getElementById('btn-row').style.display = 'none';
+      document.getElementById('progress-track').style.display = 'none';
+    }
+
+    setStatus(`${STEPS.length} step${STEPS.length>1?'s':''} ready — open camera`);
+    btnLaunch.disabled = false;
+  } catch(e) {
+    setStatus('ERROR: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ── MindAR + Three.js setup ───────────────────────────
+let mindarThree = null;
+
+async function startAR() {
+  landing.classList.add('hidden');
+  hud.classList.add('visible');
+  setStatus('starting camera...');
+
+  try {
+    mindarThree = new window.MINDAR.IMAGE.MindARThree({
+      container: document.getElementById('mindar-container'),
+      imageTargetSrc: 'targets.mind',
+      uiLoading: 'no',
+      uiScanning: 'no',
+      uiError: 'no',
+    });
+
+    const { renderer, scene, camera } = mindarThree;
+
+    // Lighting — good quality for metallic CFD surfaces
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+    const fillLight = new THREE.DirectionalLight(0x00e5ff, 0.3);
+    fillLight.position.set(-5, -5, -5);
+    scene.add(fillLight);
+
+    // Anchor — target index 0 (the single marker image)
+    anchor = mindarThree.addAnchor(0);
+
+    // Pivot for user rotation/scale gestures
+    const pivot = new THREE.Group();
+    anchor.group.add(pivot);
+
+    // Marker found / lost events
+    anchor.onTargetFound = () => {
+      markerStatus.textContent = 'MARKER FOUND ✓';
+      markerStatus.classList.add('found');
+    };
+    anchor.onTargetLost = () => {
+      markerStatus.textContent = 'SEARCHING FOR MARKER';
+      markerStatus.classList.remove('found');
+    };
+
+    // ── Gesture: pinch-to-scale + drag-to-rotate ──
+    let pinchStart = null, scaleStart = 1;
+    let dragStart = null;
+    let currentScale = 1;
+    let rotY = 0;
+
+    function dist(t) {
+      return Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+    }
+
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        pinchStart = dist(e.touches);
+        scaleStart = currentScale;
+      } else if (e.touches.length === 1) {
+        dragStart = e.touches[0].clientX;
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length === 2 && pinchStart) {
+        currentScale = Math.max(0.1, Math.min(5, scaleStart * dist(e.touches) / pinchStart));
+        pivot.scale.setScalar(currentScale);
+      } else if (e.touches.length === 1 && dragStart !== null) {
+        const dx = e.touches[0].clientX - dragStart;
+        rotY += dx * 0.01;
+        pivot.rotation.y = rotY;
+        dragStart = e.touches[0].clientX;
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchend', () => {
+      pinchStart = null; dragStart = null;
+    });
+
+    // Mouse drag (desktop)
+    let mouseDown = false, lastMouseX = 0;
+    document.addEventListener('mousedown', e => { mouseDown = true; lastMouseX = e.clientX; });
+    document.addEventListener('mouseup',   () => { mouseDown = false; });
+    document.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      rotY += (e.clientX - lastMouseX) * 0.01;
+      pivot.rotation.y = rotY;
+      lastMouseX = e.clientX;
+    });
+    document.addEventListener('wheel', e => {
+      currentScale = Math.max(0.1, Math.min(5, currentScale - e.deltaY * 0.001));
+      pivot.scale.setScalar(currentScale);
+    }, { passive: true });
+
+    // ── GLTF Loader ──
+    const loader = new THREE.GLTFLoader();
+
+    // Optional: DRACO compressed GLBs load faster — set decoder path
+    const draco = new THREE.DRACOLoader();
+    draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/libs/draco/');
+    loader.setDRACOLoader(draco);
+
+    function loadStep(index) {
+      return new Promise((resolve, reject) => {
+        if (loadedModels[index]) { resolve(loadedModels[index]); return; }
+        loader.load(
+          STEPS[index].url,
+          gltf => {
+            const model = gltf.scene;
+            // Auto-center and auto-scale to fit on marker (1 unit)
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const scaleFactor = 0.8 / maxDim;
+            model.scale.setScalar(scaleFactor);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center.multiplyScalar(scaleFactor));
+            model.visible = false;
+            pivot.add(model);
+            loadedModels[index] = model;
+            updateDot(index, 'loaded');
+            resolve(model);
+          },
+          xhr => {
+            if (index === currentStep && xhr.total) {
+              const pct = Math.round(xhr.loaded / xhr.total * 100);
+              setStatus(`loading step ${index+1}... ${pct}%`);
+            }
+          },
+          err => reject(err)
+        );
+      });
+    }
+
+    function updateDot(i, state) {
+      const d = document.getElementById(`dot-${i}`);
+      if (d) {
+        d.className = 'dot';
+        if (state) d.classList.add(state);
+      }
+    }
+
+    function showStep(index) {
+      if (activeModel) activeModel.visible = false;
+      currentStep = index;
+      stepPill.textContent = `STEP ${index+1} / ${STEPS.length}`;
+      updateProgress(index);
+      updateDot(index, 'current');
+
+      if (loadedModels[index]) {
+        loadedModels[index].visible = true;
+        activeModel = loadedModels[index];
+        setStatus(`step ${index+1} of ${STEPS.length}`);
+      } else {
+        setStatus(`loading step ${index+1}...`);
+        loadStep(index).then(model => {
+          if (currentStep === index) {
+            model.visible = true;
+            activeModel = model;
+            setStatus(`step ${index+1} of ${STEPS.length}`);
+          }
+        }).catch(e => setStatus('load error: ' + e.message));
+      }
+
+      // Preload next step silently
+      if (index + 1 < STEPS.length && !loadedModels[index + 1]) {
+        loadStep(index + 1).catch(() => {});
+      }
+    }
+
+    function updateProgress(index) {
+      const pct = STEPS.length > 1 ? (index / (STEPS.length - 1)) * 100 : 100;
+      progressFill.style.width  = pct + '%';
+      progressThumb.style.left  = pct + '%';
+    }
+
+    // Progress track click/drag
+    const track = document.getElementById('progress-track');
+    function scrubTo(e) {
+      const rect = track.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      const pct = Math.max(0, Math.min(1, x / rect.width));
+      const idx = Math.round(pct * (STEPS.length - 1));
+      stopPlay();
+      showStep(idx);
+    }
+    track.addEventListener('click', scrubTo);
+    track.addEventListener('touchstart', scrubTo, { passive: true });
+
+    // ── Start MindAR ──
+    await mindarThree.start();
+    setStatus('point camera at marker');
+
+    // Load first step immediately
+    showStep(0);
+
+    // Render loop
+    renderer.setAnimationLoop(() => {
+      mindarThree.update();
+      renderer.render(scene, camera);
+    });
+
+  } catch(e) {
+    showError('Camera error: ' + e.message + '\n\nMake sure you are on HTTPS and allowed camera access.');
+    console.error(e);
+  }
+}
+
+// ── Playback controls ─────────────────────────────────
+function startPlay() {
+  if (STEPS.length <= 1) return;
+  playing = true;
+  btnPlay.textContent = '⏸ PAUSE';
+  btnPlay.classList.add('active');
+  tick();
+}
+function stopPlay() {
+  playing = false;
+  btnPlay.textContent = '▶ PLAY';
+  btnPlay.classList.remove('active');
+  clearTimeout(playTimer);
+}
+function tick() {
+  if (!playing) return;
+  const next = (currentStep + 1) % STEPS.length;
+  showStep(next);
+  playTimer = setTimeout(tick, PLAY_INTERVAL);
+}
+
+btnPlay.addEventListener('click', () => playing ? stopPlay() : startPlay());
+document.getElementById('btn-prev').addEventListener('click', () => {
+  stopPlay();
+  showStep(Math.max(0, currentStep - 1));
+});
+document.getElementById('btn-next').addEventListener('click', () => {
+  stopPlay();
+  showStep(Math.min(STEPS.length - 1, currentStep + 1));
+});
+
+btnLaunch.addEventListener('click', startAR);
+
+// ── Boot ──────────────────────────────────────────────
+loadManifest();
+</script>
+</body>
+</html>
