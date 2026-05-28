@@ -351,7 +351,7 @@
   <div class="landing-content">
     <div class="logo-block">
       <div class="logo-label">AUGMENTED REALITY</div>
-      <div class="logo-title">CFD<span>·</span>AR</div>
+      <div class="logo-title">ASC<span>·</span>AR</div>
     </div>
     <div class="divider"></div>
     <div class="marker-card">
@@ -516,15 +516,18 @@ async function startAR() {
 
     const { renderer, scene, camera } = mindarThree;
 
-    // Lighting — good quality for metallic CFD surfaces
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    // Bright lighting for model visibility
+    const ambient = new THREE.AmbientLight(0xffffff, 2.0);
     scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 3.0);
     dirLight.position.set(5, 10, 7);
     scene.add(dirLight);
-    const fillLight = new THREE.DirectionalLight(0x00e5ff, 0.3);
-    fillLight.position.set(-5, -5, -5);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    fillLight.position.set(-5, 5, -5);
     scene.add(fillLight);
+    const frontLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    frontLight.position.set(0, 0, 10);
+    scene.add(frontLight);
 
     // Anchor — target index 0 (the single marker image)
     anchor = mindarThree.addAnchor(0);
@@ -547,7 +550,7 @@ async function startAR() {
     let pinchStart = null, scaleStart = 1;
     let dragStart = null;
     let currentScale = 1;
-    let rotY = 0;
+    let rotY = 0, rotX = 0;
 
     function dist(t) {
       return Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
@@ -558,7 +561,7 @@ async function startAR() {
         pinchStart = dist(e.touches);
         scaleStart = currentScale;
       } else if (e.touches.length === 1) {
-        dragStart = e.touches[0].clientX;
+        dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
       e.preventDefault();
     }, { passive: false });
@@ -568,10 +571,14 @@ async function startAR() {
         currentScale = Math.max(0.1, Math.min(5, scaleStart * dist(e.touches) / pinchStart));
         pivot.scale.setScalar(currentScale);
       } else if (e.touches.length === 1 && dragStart !== null) {
-        const dx = e.touches[0].clientX - dragStart;
+        const dx = e.touches[0].clientX - dragStart.x;
+        const dy = e.touches[0].clientY - dragStart.y;
         rotY += dx * 0.01;
+        rotX += dy * 0.01;
+        rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotX)); // clamp vertical
         pivot.rotation.y = rotY;
-        dragStart = e.touches[0].clientX;
+        pivot.rotation.x = rotX;
+        dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
       e.preventDefault();
     }, { passive: false });
@@ -580,15 +587,19 @@ async function startAR() {
       pinchStart = null; dragStart = null;
     });
 
-    // Mouse drag (desktop)
-    let mouseDown = false, lastMouseX = 0;
-    document.addEventListener('mousedown', e => { mouseDown = true; lastMouseX = e.clientX; });
+    // Mouse drag (desktop) — both axes
+    let mouseDown = false, lastMouseX = 0, lastMouseY = 0;
+    document.addEventListener('mousedown', e => { mouseDown = true; lastMouseX = e.clientX; lastMouseY = e.clientY; });
     document.addEventListener('mouseup',   () => { mouseDown = false; });
     document.addEventListener('mousemove', e => {
       if (!mouseDown) return;
       rotY += (e.clientX - lastMouseX) * 0.01;
+      rotX += (e.clientY - lastMouseY) * 0.01;
+      rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotX));
       pivot.rotation.y = rotY;
+      pivot.rotation.x = rotX;
       lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
     });
     document.addEventListener('wheel', e => {
       currentScale = Math.max(0.1, Math.min(5, currentScale - e.deltaY * 0.001));
