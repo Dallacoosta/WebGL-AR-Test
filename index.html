@@ -605,18 +605,44 @@ async function startAR() {
           STEPS[index].url,
           gltf => {
             const model = gltf.scene;
+
+            // Force all materials to be visible (handles missing textures/vertex colors)
+            model.traverse(obj => {
+              if (obj.isMesh) {
+                // If material has no map and no vertex colors, give it a default color
+                if (obj.material) {
+                  const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                  mats.forEach(mat => {
+                    mat.side = THREE.DoubleSide;
+                    if (!mat.map && !mat.vertexColors) {
+                      mat.color = mat.color || new THREE.Color(0x00e5ff);
+                    }
+                    mat.needsUpdate = true;
+                  });
+                }
+              }
+            });
+
             // Auto-center and auto-scale to fit on marker (1 unit)
             const box = new THREE.Box3().setFromObject(model);
             const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             const scaleFactor = 0.8 / maxDim;
+
+            // Center the model on the marker: offset by center, lift so bottom sits on marker
             model.scale.setScalar(scaleFactor);
-            const center = box.getCenter(new THREE.Vector3());
-            model.position.sub(center.multiplyScalar(scaleFactor));
+            model.position.set(
+              -center.x * scaleFactor,
+              -center.y * scaleFactor,
+              // Shift up so the model base is at z=0 (marker plane) and floats above
+              (-box.min.z + 0.1) * scaleFactor
+            );
             model.visible = false;
             pivot.add(model);
             loadedModels[index] = model;
             updateDot(index, 'loaded');
+            setStatus(`model loaded — ${Math.round(size.x*100)}x${Math.round(size.y*100)}x${Math.round(size.z*100)}cm`);
             resolve(model);
           },
           xhr => {
@@ -688,6 +714,12 @@ async function startAR() {
     // ── Start MindAR ──
     await mindarThree.start();
     setStatus('point camera at marker');
+
+    // Debug box — confirms anchor is working (remove once model shows up)
+    const debugGeo = new THREE.BoxGeometry(0.5, 0.5, 0.1);
+    const debugMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, wireframe: true });
+    const debugBox = new THREE.Mesh(debugGeo, debugMat);
+    anchor.group.add(debugBox);
 
     // Load first step immediately
     showStep(0);
