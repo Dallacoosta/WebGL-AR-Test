@@ -508,6 +508,10 @@ async function startAR() {
       uiLoading: 'no',
       uiScanning: 'no',
       uiError: 'no',
+      filterMinCF: 0.001,   // low = smoother but more lag
+      filterBeta: 0.001,    // low = less jitter
+      missTolerance: 5,     // frames before losing target
+      warmupTolerance: 5,   // frames before acquiring target
     });
 
     const { renderer, scene, camera } = mindarThree;
@@ -525,8 +529,9 @@ async function startAR() {
     // Anchor — target index 0 (the single marker image)
     anchor = mindarThree.addAnchor(0);
 
-    // Models added directly to anchor.group for debugging
-    const pivot = anchor.group;
+    // Pivot sits inside anchor.group — gestures rotate/scale pivot, not the anchor
+    const pivot = new THREE.Group();
+    anchor.group.add(pivot);
 
     // Marker found / lost events
     anchor.onTargetFound = () => {
@@ -710,11 +715,11 @@ async function startAR() {
     track.addEventListener('click', scrubTo);
     track.addEventListener('touchstart', scrubTo, { passive: true });
 
-    // Add debug plane BEFORE start()
+    // Add debug plane to pivot (not anchor.group directly)
     const debugGeo = new THREE.PlaneGeometry(1, 1);
     const debugMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
     const debugPlane = new THREE.Mesh(debugGeo, debugMat);
-    anchor.group.add(debugPlane);
+    pivot.add(debugPlane);
 
     // Load first step immediately
     showStep(0);
