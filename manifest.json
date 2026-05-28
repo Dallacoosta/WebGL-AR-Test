@@ -1,7 +1,5 @@
 {
   "steps": [
-    { "url": "models/step_001.glb", "label": "t = 0.0s" },
-    { "url": "models/step_002.glb", "label": "t = 0.5s" },
-    { "url": "models/step_003.glb", "label": "t = 1.0s" }
+    { "url": "Unnamed-MUSICA_ASM.gltf", "label": "t = 0.0s" }
   ]
 }
