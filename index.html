@@ -525,9 +525,8 @@ async function startAR() {
     // Anchor — target index 0 (the single marker image)
     anchor = mindarThree.addAnchor(0);
 
-    // Pivot for user rotation/scale gestures
-    const pivot = new THREE.Group();
-    anchor.group.add(pivot);
+    // Models added directly to anchor.group for debugging
+    const pivot = anchor.group;
 
     // Marker found / lost events
     anchor.onTargetFound = () => {
@@ -713,13 +712,13 @@ async function startAR() {
 
     // ── Start MindAR ──
     await mindarThree.start();
-    setStatus('point camera at marker');
+    setStatus('AR started — point at marker');
 
-    // Debug box — confirms anchor is working (remove once model shows up)
-    const debugGeo = new THREE.BoxGeometry(0.5, 0.5, 0.1);
-    const debugMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, wireframe: true });
-    const debugBox = new THREE.Mesh(debugGeo, debugMat);
-    anchor.group.add(debugBox);
+    // Solid bright debug plane — if this shows up the anchor works
+    const debugGeo = new THREE.PlaneGeometry(1, 1);
+    const debugMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+    const debugPlane = new THREE.Mesh(debugGeo, debugMat);
+    anchor.group.add(debugPlane);
 
     // Load first step immediately
     showStep(0);
