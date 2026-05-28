@@ -117,8 +117,8 @@
 
 <a-scene
   embedded
-  arjs="sourceType: webcam; debugUIEnabled: false;"
-  renderer="antialias: true; logarithmicDepthBuffer: true; alpha: true;"
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+  renderer="antialias: false; alpha: true;"
   vr-mode-ui="enabled: false"
   loading-screen="enabled: false">
 
@@ -210,16 +210,39 @@ function injectAssets() {
   modelEl.setAttribute('rotation', '0 180 0');
   marker.appendChild(modelEl);
 
-  modelEl.addEventListener('model-loaded', () => dbg(`frame ${current + 1} loaded ✓`));
+  modelEl.addEventListener('model-loaded', () => {
+    dbg(`frame ${current + 1} loaded ✓`);
+    prog('model ready!');
+  });
   modelEl.addEventListener('model-error', (e) => {
     const detail = e.detail && e.detail.src ? e.detail.src : 'unknown';
     dbg(`frame ${current + 1} ERROR — ${detail}`);
     console.error('[AR] model-error detail:', e.detail);
   });
 
+  // Monitor fetch progress manually
+  prog('fetching model file...');
+  fetch(frames[0])
+    .then(r => {
+      if (!r.ok) { prog(`HTTP ${r.status} loading ${frames[0]}`); return; }
+      const total = r.headers.get('content-length');
+      const reader = r.body.getReader();
+      let received = 0;
+      function read() {
+        return reader.read().then(({done, value}) => {
+          if (done) { prog('download done — parsing model...'); return; }
+          received += value.length;
+          const pct = total ? Math.round(received/total*100) : received;
+          prog(`downloading... ${total ? pct+'%' : Math.round(received/1024)+'KB'}`);
+          return read();
+        });
+      }
+      return read();
+    })
+    .catch(e => prog('fetch error: ' + e.message));
+
   // Set by direct URL, not #id reference
   modelEl.setAttribute('gltf-model', frames[0]);
-  prog(`ready — ${frames.length} frame(s)`);
   document.getElementById('btn-launch').disabled = false;
 }
 
