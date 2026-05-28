@@ -6,10 +6,10 @@
 <title>CFD · AR Viewer</title>
 
 <!-- MindAR + Three.js -->
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
 
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap');
@@ -351,8 +351,12 @@
     <div class="divider"></div>
     <div class="marker-card">
       <div class="marker-label">TARGET MARKER</div>
-      <img id="marker-preview" src="marker.png" alt="AR Marker"
-           onerror="this.style.display='none'"/>
+      <div id="marker-wrap">
+        <!-- Shows marker.png if it exists, otherwise shows setup instructions -->
+        <img id="marker-preview" src="marker.png" alt="AR Marker"
+             style="width:140px;height:140px;object-fit:contain;background:#fff;padding:6px;display:block;"
+             onerror="document.getElementById('marker-wrap').innerHTML=markerPlaceholder()"/>
+      </div>
       <div class="marker-hint">
         Print this marker or display it on a second screen.<br/>
         Hold flat · good light · 20–40 cm away
@@ -428,6 +432,22 @@ function setStatus(msg) { statusMsg.textContent = msg; }
 function showError(msg)  {
   errorMsg.textContent = msg;
   errorOverlay.classList.add('show');
+}
+
+// ── Marker placeholder ───────────────────────────────────────────────
+function markerPlaceholder() {
+  return `<div style="width:140px;height:140px;border:2px dashed rgba(0,229,255,0.4);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;text-align:center;">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+      <rect x="2" y="2" width="36" height="36" stroke="#00e5ff" stroke-width="1.5" stroke-dasharray="4 2"/>
+      <rect x="8" y="8" width="10" height="10" fill="#00e5ff" opacity="0.6"/>
+      <rect x="22" y="8" width="10" height="10" fill="#00e5ff" opacity="0.6"/>
+      <rect x="8" y="22" width="10" height="10" fill="#00e5ff" opacity="0.6"/>
+      <rect x="16" y="16" width="8" height="8" fill="#00e5ff" opacity="0.3"/>
+    </svg>
+    <div style="font-family:Share Tech Mono,monospace;font-size:8px;color:#00e5ff;letter-spacing:2px;line-height:1.7;">
+      ADD MARKER<br/>SEE README
+    </div>
+  </div>`;
 }
 
 // ── Load manifest ─────────────────────────────────────
