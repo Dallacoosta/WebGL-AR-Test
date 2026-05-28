@@ -216,7 +216,11 @@ function injectAssets() {
   marker.appendChild(modelEl);
 
   modelEl.addEventListener('model-loaded', () => dbg(`frame ${current + 1} loaded ✓`));
-  modelEl.addEventListener('model-error',  () => dbg(`frame ${current + 1} ERROR — check filename`));
+  modelEl.addEventListener('model-error',  (e) => {
+    const detail = e.detail && e.detail.src ? e.detail.src : 'unknown';
+    dbg(`frame ${current + 1} ERROR — ${detail}`);
+    console.error('[AR] model-error detail:', e.detail);
+  });
 
   // Set up scrubber range
   const scrubber = document.getElementById('scrubber');
